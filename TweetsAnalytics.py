@@ -28,54 +28,6 @@ api_key_secret = 'qnnTXV9K0H9PQYXG4wviJdbLTaN4Bi8FrCQgszJq7zIu3DtUO2'
 
 monthNum = {'Jan':1, 'Feb':2, 'Mar':3, 'Apr':4, 'May':5, 'Jun':6, 'Jul':7, 'Aug':8, 'Sep':9, 'Oct':10, 'Nov':11, 'Dec':12}
 
-def plot(xvalues, yvalues, annotations, xbarvals, ybarvals):
-    fig = plt.figure()
-
-    ax = fig.add_subplot(211)
-    ax.set_title('Average Sentiment Score Per Day')
-    lines = ax.plot(yvalues,xvalues, 'go', yvalues,xvalues, 'g')
-    annot = ax.annotate("", xy=(0, 0), xytext=(0.05,0.05), verticalalignment='top', textcoords="offset points",wrap=True,
-                        bbox=dict(boxstyle="round", fc="w"))
-    annot.set_visible(False)
-
-    def update_annot(ind):
-
-        x, y = lines[0].get_data()
-        annot.xy = (x[ind["ind"][0]], y[ind["ind"][0]])
-        text = "{}".format(" ".join([annotations[n] for n in ind["ind"]]))
-        annot.set_text(text)
-        annot.get_bbox_patch().set_alpha(1)
-
-    def hover(event):
-        vis = annot.get_visible()
-        if event.inaxes == ax:
-            cont, ind = lines[0].contains(event)
-            if cont:
-                update_annot(ind)
-                annot.set_visible(True)
-                annot.set_zorder(10)
-                fig.canvas.draw_idle()
-            else:
-                if vis:
-                    annot.set_visible(False)
-                    fig.canvas.draw_idle()
-
-    fig.canvas.mpl_connect("motion_notify_event", hover)
-
-    ax.set_xlabel('Days Ago')
-    ax.set_ylabel('Sentiment Score')
-    ax.set_xlim(left=0)
-
-    ax2 = fig.add_subplot(212)
-    ax2.bar(np.arange(len(xbarvals)), ybarvals, align='center', alpha=0.5)
-    ax2.set_xticks(np.arange(len(xbarvals)))
-    ax2.set_xticklabels(xbarvals, rotation='vertical')
-    ax2.set_ylabel('Frequency')
-    ax2.set_title('Popular Key Phrases')
-
-    plt.tight_layout()
-    plt.show()
-
 def get_score_statement(score, username):
     if score <=0.2:
         return "@"+ username + " was deep deep in the dumps today :("
@@ -124,6 +76,8 @@ class Dialog(QDialog):
         self.userName = QLineEdit()
         self.tweets = QLineEdit()
         self.keyPhrase = QLineEdit()
+        self.aggregateTweets = []
+        self.Dates = []
         self.createFormGroupBox()
 
         buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -135,10 +89,10 @@ class Dialog(QDialog):
         mainLayout.addWidget(buttonBox)
         self.setLayout(mainLayout)
 
-        self.setWindowTitle("Form Layout - pythonspot.com")
+        self.setWindowTitle("Tweetalyzer")
 
     def createFormGroupBox(self):
-        self.formGroupBox = QGroupBox("Form layout")
+        self.formGroupBox = QGroupBox("Fill Each One")
         layout = QFormLayout()
         layout.addRow(QLabel("Twitter UserName:"), self.userName)
         layout.addRow(QLabel("Number of Tweets:"), self.tweets)
@@ -146,7 +100,7 @@ class Dialog(QDialog):
         self.formGroupBox.setLayout(layout)
 
     def pop_up_error(self, text):
-        QMessageBox.question(self, 'Message - pythonspot.com', text, QMessageBox.Ok,
+        QMessageBox.warning(self, 'title', text, QMessageBox.Ok,
                              QMessageBox.Ok)
     def accept(self):
         if self.userName.text() != "" and self.tweets.text()!="" and self.keyPhrase.text() != "" :
@@ -200,17 +154,21 @@ class Dialog(QDialog):
                 i = 0
                 while i < len(tweets):
                     start = find_date_form(tweets[i]['created_at'])
+                    tweetstr = "Tweet: {}\n\nScore: {}\n\n\n".format(tweets[i]['text'],sent_docs[i]['score'])
                     count = 1
                     sum = sent_docs[i]['score']
                     i += 1
                     while i < len(tweets) and find_date_form(tweets[i]['created_at']) == start:
                         count += 1
                         sum += sent_docs[i]['score']
+                        tweetstr+="Tweet: {}\n\nScore: {}\n\n\n".format(tweets[i]['text'],sent_docs[i]['score'])
                         i += 1
                     xvalues.append(sum / count)
                     yvalues.append(find_days_between(start, currDate))
                     annotationStr = str(start) +'\n' +"score: "+str(sum/count)+"\n" + get_score_statement(sum/count, self.userName.text())
                     annotations.append(annotationStr)
+                    self.aggregateTweets.append(tweetstr)
+                    self.Dates.append(str(start))
                 xbarvals = []
                 ybarvals = []
                 for pairInd in range(0, nPopWords):
@@ -218,12 +176,77 @@ class Dialog(QDialog):
                         break
                     xbarvals.append(freq_descending[pairInd][0])
                     ybarvals.append(freq_descending[pairInd][1])
-                plot(xvalues, yvalues, annotations, xbarvals, ybarvals)
+                self.plot(xvalues, yvalues, annotations, xbarvals, ybarvals)
             else:
                 self.pop_up_error("Tweet Count must be greater than 0")
         else:
             self.pop_up_error("No field must be left empty!")
 
+    def pop_up_tweets(self, tweets, tweetsDate):
+        msgBox = QMessageBox()
+        msgBox.setText(tweets)
+        msgBox.setWindowTitle("Tweets on "+tweetsDate)
+        msgBox.exec_()
+
+    def plot(self, xvalues, yvalues, annotations, xbarvals, ybarvals):
+        fig = plt.figure()
+
+        ax = fig.add_subplot(211)
+        ax.set_title('Average Sentiment Score Per Day')
+        lines = ax.plot(yvalues, xvalues, 'go', yvalues, xvalues, 'g')
+        annot = ax.annotate("", xy=(0, 0), xytext=(0.05, 0.05), verticalalignment='top', textcoords="offset points",
+                            wrap=True,
+                            bbox=dict(boxstyle="round", fc="w"))
+        annot.set_visible(False)
+
+        def pop_up_tweets(ind):
+            for n in ind["ind"]:
+                self.pop_up_tweets(self.aggregateTweets[n], self.Dates[n])
+
+        def onclick(event):
+            if event.inaxes == ax:
+                cont, ind = lines[0].contains(event)
+                if cont:
+                    pop_up_tweets(ind)
+
+        def update_annot(ind):
+
+            x, y = lines[0].get_data()
+            annot.xy = (x[ind["ind"][0]], y[ind["ind"][0]])
+            text = "{}".format(" ".join([annotations[n] for n in ind["ind"]]))
+            annot.set_text(text)
+            annot.get_bbox_patch().set_alpha(1)
+
+        def hover(event):
+            vis = annot.get_visible()
+            if event.inaxes == ax:
+                cont, ind = lines[0].contains(event)
+                if cont:
+                    update_annot(ind)
+                    annot.set_visible(True)
+                    annot.set_zorder(10)
+                    fig.canvas.draw_idle()
+                else:
+                    if vis:
+                        annot.set_visible(False)
+                        fig.canvas.draw_idle()
+
+        fig.canvas.mpl_connect("motion_notify_event", hover)
+        cid = fig.canvas.mpl_connect('button_press_event', onclick)
+
+        ax.set_xlabel('Days Ago')
+        ax.set_ylabel('Sentiment Score')
+        ax.set_xlim(left=0)
+
+        ax2 = fig.add_subplot(212)
+        ax2.bar(np.arange(len(xbarvals)), ybarvals, align='center', alpha=0.5)
+        ax2.set_xticks(np.arange(len(xbarvals)))
+        ax2.set_xticklabels(xbarvals, rotation='vertical')
+        ax2.set_ylabel('Frequency')
+        ax2.set_title('Popular Key Phrases')
+
+        plt.tight_layout()
+        plt.show()
 def main():
     app = QApplication(sys.argv)
     dialog = Dialog()
