@@ -95,8 +95,8 @@ class Dialog(QDialog):
         self.formGroupBox = QGroupBox("Fill Each One")
         layout = QFormLayout()
         layout.addRow(QLabel("Twitter UserName:"), self.userName)
-        layout.addRow(QLabel("Number of Tweets:"), self.tweets)
-        layout.addRow(QLabel("Top N KeyPhrases:"), self.keyPhrase)
+        layout.addRow(QLabel("Number of Tweets to Analyze:"), self.tweets)
+        layout.addRow(QLabel("# Most Popular KeyPhrases:"), self.keyPhrase)
         self.formGroupBox.setLayout(layout)
 
     def pop_up_error(self, text):
